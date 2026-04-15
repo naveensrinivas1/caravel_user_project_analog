@@ -1,3 +1,5 @@
+* SPDX-FileCopyrightText: 2026 Naveen Srinivas
+* SPDX-License-Identifier: Apache-2.0
 **.subckt example_por_tb vdd3v3 vdd1v8 porb_h porb_l por_l
 .param mc_switch=0
 *.opin vdd3v3

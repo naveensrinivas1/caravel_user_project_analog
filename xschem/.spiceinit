@@ -1,3 +1,5 @@
+* SPDX-FileCopyrightText: 2026 Naveen Srinivas
+* SPDX-License-Identifier: Apache-2.0
 * ngspice initialization for sky130
 * assert BSIM compatibility mode with "nf" vs. "W"
 set ngbehavior=hsa

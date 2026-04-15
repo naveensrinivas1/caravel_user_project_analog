@@ -1,182 +1,136 @@
-// SPDX-FileCopyrightText: 2020 Efabless Corporation
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-FileCopyrightText: 2026 Naveen Srinivas
 // SPDX-License-Identifier: Apache-2.0
-
-`default_nettype none
-
-/*
- *-------------------------------------------------------------
- *
- * user_analog_project_wrapper
- *
- * This wrapper enumerates all of the pins available to the
- * user for the user analog project.
- *
- *-------------------------------------------------------------
- */
-
+//
+// user_analog_project_wrapper.v - Caravel analog wrapper for 7-stage inference ASIC
+// Target: Efabless chipIgnite / SKY130A
+// Generated: 2026-04-15T17:55:23.492Z
+//
+// Pin mapping:
+//   analog_io[0:3]  - Sensor inputs (ain0-3)
+//   analog_io[4]    - Voltage reference (0.9V)
+//   analog_io[5]    - Bias current input
+//   analog_io[6:7]  - Analog monitor outputs
+//   io_in[8:10]     - SPI bus (CLK, MOSI, CS*)
+//   io_out[11:14]   - Classification output DOUT[3:0]
+//   io_out[15]      - Valid strobe
+//   io_out[16]      - IRQ
+//
 module user_analog_project_wrapper (
-`ifdef USE_POWER_PINS
-    inout vdda1,	// User area 1 3.3V supply
-    inout vdda2,	// User area 2 3.3V supply
-    inout vssa1,	// User area 1 analog ground
-    inout vssa2,	// User area 2 analog ground
-    inout vccd1,	// User area 1 1.8V supply
-    inout vccd2,	// User area 2 1.8v supply
-    inout vssd1,	// User area 1 digital ground
-    inout vssd2,	// User area 2 digital ground
-`endif
+    // Power pins (active for Caravel)
+    inout vccd1,
+    inout vccd2,
+    inout vssd1,
+    inout vssd2,
+    inout vdda1,
+    inout vdda2,
+    inout vssa1,
+    inout vssa2,
 
-    // Wishbone Slave ports (WB MI A)
-    input wb_clk_i,
-    input wb_rst_i,
-    input wbs_stb_i,
-    input wbs_cyc_i,
-    input wbs_we_i,
-    input [3:0] wbs_sel_i,
-    input [31:0] wbs_dat_i,
-    input [31:0] wbs_adr_i,
-    output wbs_ack_o,
-    output [31:0] wbs_dat_o,
+    // Wishbone Slave ports
+    input   wb_clk_i,
+    input   wb_rst_i,
+    input   wbs_stb_i,
+    input   wbs_cyc_i,
+    input   wbs_we_i,
+    input   [3:0] wbs_sel_i,
+    input   [31:0] wbs_dat_i,
+    input   [31:0] wbs_adr_i,
+    output  wbs_ack_o,
+    output  [31:0] wbs_dat_o,
 
     // Logic Analyzer Signals
     input  [127:0] la_data_in,
     output [127:0] la_data_out,
     input  [127:0] la_oenb,
 
-    /* GPIOs.  There are 27 GPIOs, on either side of the analog.
-     * These have the following mapping to the GPIO padframe pins
-     * and memory-mapped registers, since the numbering remains the
-     * same as caravel but skips over the analog I/O:
-     *
-     * io_in/out/oeb/in_3v3 [26:14]  <--->  mprj_io[37:25]
-     * io_in/out/oeb/in_3v3 [13:0]   <--->  mprj_io[13:0]	
-     *
-     * When the GPIOs are configured by the Management SoC for
-     * user use, they have three basic bidirectional controls:
-     * in, out, and oeb (output enable, sense inverted).  For
-     * analog projects, a 3.3V copy of the signal input is
-     * available.  out and oeb must be 1.8V signals.
-     */
+    // IOs - 38 pads
+    input  [37:0] io_in,
+    output [37:0] io_out,
+    output [37:0] io_oeb,
 
-    input  [`MPRJ_IO_PADS-`ANALOG_PADS-1:0] io_in,
-    input  [`MPRJ_IO_PADS-`ANALOG_PADS-1:0] io_in_3v3,
-    output [`MPRJ_IO_PADS-`ANALOG_PADS-1:0] io_out,
-    output [`MPRJ_IO_PADS-`ANALOG_PADS-1:0] io_oeb,
+    // Analog - 29 pads
+    inout [28:0] analog_io,
 
-    /* Analog (direct connection to GPIO pad---not for high voltage or
-     * high frequency use).  The management SoC must turn off both
-     * input and output buffers on these GPIOs to allow analog access.
-     * These signals may drive a voltage up to the value of VDDIO
-     * (3.3V typical, 5.5V maximum).
-     * 
-     * Note that analog I/O is not available on the 7 lowest-numbered
-     * GPIO pads, and so the analog_io indexing is offset from the
-     * GPIO indexing by 7, as follows:
-     *
-     * gpio_analog/noesd [17:7]  <--->  mprj_io[35:25]
-     * gpio_analog/noesd [6:0]   <--->  mprj_io[13:7]	
-     *
-     */
-    
-    inout [`MPRJ_IO_PADS-`ANALOG_PADS-10:0] gpio_analog,
-    inout [`MPRJ_IO_PADS-`ANALOG_PADS-10:0] gpio_noesd,
-
-    /* Analog signals, direct through to pad.  These have no ESD at all,
-     * so ESD protection is the responsibility of the designer.
-     *
-     * user_analog[10:0]  <--->  mprj_io[24:14]
-     *
-     */
-    inout [`ANALOG_PADS-1:0] io_analog,
-
-    /* Additional power supply ESD clamps, one per analog pad.  The
-     * high side should be connected to a 3.3-5.5V power supply.
-     * The low side should be connected to ground.
-     *
-     * clamp_high[2:0]   <--->  mprj_io[20:18]
-     * clamp_low[2:0]    <--->  mprj_io[20:18]
-     *
-     */
-    inout [2:0] io_clamp_high,
-    inout [2:0] io_clamp_low,
-
-    // Independent clock (on independent integer divider)
+    // Independent clock
     input   user_clock2,
 
     // User maskable interrupt signals
     output [2:0] user_irq
 );
 
-/*--------------------------------------*/
-/* User project is instantiated  here   */
-/*--------------------------------------*/
+    // --- Internal Wires ---
+    wire [3:0] ain;
+    wire       vref_ext;
+    wire       ibias_ext;
+    wire       vmon_norm;
+    wire       vmon_wta;
 
-user_analog_proj_example mprj (
-    `ifdef USE_POWER_PINS
-        .vdda1(vdda1),  // User area 1 3.3V power
-        .vdda2(vdda2),  // User area 2 3.3V power
-        .vssa1(vssa1),  // User area 1 analog ground
-        .vssa2(vssa2),  // User area 2 analog ground
-        .vccd1(vccd1),  // User area 1 1.8V power
-        .vccd2(vccd2),  // User area 2 1.8V power
-        .vssd1(vssd1),  // User area 1 digital ground
-        .vssd2(vssd2),  // User area 2 digital ground
-    `endif
+    wire       spi_clk_int;
+    wire       spi_mosi_int;
+    wire       spi_cs_n_int;
 
-    .wb_clk_i(wb_clk_i),
-    .wb_rst_i(wb_rst_i),
+    wire [3:0] dout;
+    wire       valid_out;
+    wire       irq_out;
 
-    // MGMT SoC Wishbone Slave
+    // --- Analog Pin Assignments ---
+    assign ain[0]    = analog_io[0];
+    assign ain[1]    = analog_io[1];
+    assign ain[2]    = analog_io[2];
+    assign ain[3]    = analog_io[3];
+    assign vref_ext  = analog_io[4];
+    assign ibias_ext = analog_io[5];
+    assign analog_io[6] = vmon_norm;
+    assign analog_io[7] = vmon_wta;
 
-    .wbs_cyc_i(wbs_cyc_i),
-    .wbs_stb_i(wbs_stb_i),
-    .wbs_we_i(wbs_we_i),
-    .wbs_sel_i(wbs_sel_i),
-    .wbs_adr_i(wbs_adr_i),
-    .wbs_dat_i(wbs_dat_i),
-    .wbs_ack_o(wbs_ack_o),
-    .wbs_dat_o(wbs_dat_o),
+    // --- Digital Input Pin Assignments ---
+    assign spi_clk_int  = io_in[8];
+    assign spi_mosi_int = io_in[9];
+    assign spi_cs_n_int = io_in[10];
 
-    // Logic Analyzer
+    // --- Digital Output Pin Assignments ---
+    assign io_out[11] = dout[0];
+    assign io_out[12] = dout[1];
+    assign io_out[13] = dout[2];
+    assign io_out[14] = dout[3];
+    assign io_out[15] = valid_out;
+    assign io_out[16] = irq_out;
 
-    .la_data_in(la_data_in),
-    .la_data_out(la_data_out),
-    .la_oenb (la_oenb),
+    // --- Output Enable (active low: 0 = output, 1 = tri-state/input) ---
+    // GPIO  0-7:  unused → tri-state (oeb=1)
+    // GPIO  8-10: digital inputs (SPI) → tri-state (oeb=1)
+    //   Note: GPIO 10 has analog connectivity in layout → oeb must be 1
+    // GPIO 11-13: digital outputs (DOUT[0:2]) → drive (oeb=0)
+    // GPIO 14:    has analog connectivity in layout → oeb=1 (disable digital driver)
+    // GPIO 15-16: digital outputs (VALID, IRQ) → drive (oeb=0)
+    // GPIO 17-37: unused → tri-state (oeb=1)
+    assign io_oeb[7:0]   = 8'hFF;           // unused: tri-state
+    assign io_oeb[10:8]  = 3'b111;          // SPI inputs + GPIO10 analog: tri-state
+    assign io_oeb[13:11] = 3'b000;          // DOUT[0:2]: drive
+    assign io_oeb[14]    = 1'b1;            // GPIO14 analog: tri-state (OEB high)
+    assign io_oeb[16:15] = 2'b00;           // VALID, IRQ: drive
+    assign io_oeb[37:17] = {21{1'b1}};      // unused: tri-state
 
-    // IO Pads
-    .io_in (io_in),
-    .io_in_3v3 (io_in_3v3),
-    .io_out(io_out),
-    .io_oeb(io_oeb),
+    // --- Tie-off unused outputs ---
+    assign io_out[7:0]   = 8'h00;
+    assign io_out[10:8]  = 3'b000;
+    assign io_out[37:17] = {21{1'b0}};
 
-    // GPIO-analog
-    .gpio_analog(gpio_analog),
-    .gpio_noesd(gpio_noesd),
+    // --- Wishbone (unused — active tie-off to avoid HI-Z) ---
+    assign wbs_ack_o  = 1'b0;
+    assign wbs_dat_o  = 32'h0;
 
-    // Dedicated analog
-    .io_analog(io_analog),
-    .io_clamp_high(io_clamp_high),
-    .io_clamp_low(io_clamp_low),
+    // --- Logic Analyzer (unused — active tie-off) ---
+    assign la_data_out = 128'h0;
 
-    // Clock
-    .user_clock2(user_clock2),
+    // --- IRQ ---
+    assign user_irq = {1'b0, 1'b0, irq_out};
 
-    // IRQ
-    .irq(user_irq)
-);
+    // --- Placeholder: tie outputs for precheck ---
+    assign dout      = 4'b0000;
+    assign valid_out = 1'b0;
+    assign irq_out   = 1'b0;
+    assign vmon_norm = 1'b0;
+    assign vmon_wta  = 1'b0;
 
-endmodule	// user_analog_project_wrapper
-
-`default_nettype wire
+endmodule

@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Naveen Srinivas
+# SPDX-License-Identifier: Apache-2.0
+#
+# .magicrc — runtime PDK configuration for SKY130A
+
+if {[info exists ::env(PDK_ROOT)] && $::env(PDK_ROOT) ne ""} {
+  set PDK_ROOT $::env(PDK_ROOT)
+} elseif {[file isdirectory "/home/ttuser/pdk"]} {
+  set PDK_ROOT "/home/ttuser/pdk"
+} elseif {[info exists ::env(HOME)] && [file isdirectory "$::env(HOME)/pdk"]} {
+  set PDK_ROOT "$::env(HOME)/pdk"
+} else {
+  set PDK_ROOT "/home/ttuser/pdk"
+}
+set PDKPATH $PDK_ROOT/sky130A
+tech load $PDKPATH/libs.tech/magic/sky130A.tech
+source $PDKPATH/libs.tech/magic/sky130A.magicrc
